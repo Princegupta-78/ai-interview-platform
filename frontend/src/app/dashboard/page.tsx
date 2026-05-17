@@ -29,7 +29,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white p-10">
+    <div className="min-h-screen bg-gradient-to-b from-black to-zinc-900 text-white p-10">
       
       <div className="flex justify-between items-center mb-10 max-w-4xl mx-auto">
         <h1 className="text-4xl font-bold">
