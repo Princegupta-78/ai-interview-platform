@@ -1,3 +1,6 @@
+import os
+from dotenv import load_dotenv
+import google.generativeai as genai
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -19,6 +22,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Initialize Gemini
+load_dotenv()
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
 
 # Initialize the bcrypt hashing engine
 pwd_context = CryptContext(
@@ -81,3 +88,24 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
             "email": existing_user.email
         }
     }
+
+@app.get("/generate-questions")
+def generate_questions(role: str):
+    # 1. The Prompt Engineering
+    prompt = f"""
+    Generate 5 professional interview questions for a {role} role.
+    Return ONLY the questions, numbered 1 to 5, with no introduction or conclusion.
+    """
+    
+    try:
+        # 2. Call the Gemini Model 
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        response = model.generate_content(prompt)
+        
+        # 3. Extract the text
+        questions = response.text
+        
+        return {"questions": questions}
+        
+    except Exception as e:
+        return {"error": str(e)}
