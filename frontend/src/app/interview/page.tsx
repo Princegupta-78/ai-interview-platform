@@ -12,10 +12,12 @@ export default function InterviewPage() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [loading, setLoading] = useState(false);
 
+  // NEW: Day 11 Evaluation States
+  const [feedback, setFeedback] = useState("");
+  const [evaluating, setEvaluating] = useState(false);
+
   // Timer state
   const [seconds, setSeconds] = useState(0);
-
-  // NEW: State to track if we are in the browser (Hydration fix)
   const [isMounted, setIsMounted] = useState(false);
 
   // Speech Recognition
@@ -25,7 +27,7 @@ export default function InterviewPage() {
     browserSupportsSpeechRecognition,
   } = useSpeechRecognition();
 
-  // Wait until component mounts in the browser to avoid Hydration errors
+  // Avoid Hydration errors
   useEffect(() => {
     setIsMounted(true);
   }, []);
@@ -33,30 +35,25 @@ export default function InterviewPage() {
   // Timer Logic
   useEffect(() => {
     let timer: NodeJS.Timeout;
-
     if (started) {
       timer = setInterval(() => {
         setSeconds((prev) => prev + 1);
       }, 1000);
     }
-
     return () => clearInterval(timer);
   }, [started]);
 
-  // Generate AI Interview
+  // Generate Questions
   const generateInterview = async () => {
     if (!role) return alert("Please enter a role first!");
-
     setLoading(true);
 
     try {
       const response = await fetch(
         `http://127.0.0.1:8000/generate-questions?role=${role}`
       );
-
       const data = await response.json();
       
-      // Safety check for backend errors
       if (data.error) {
         alert(`Backend Error: ${data.error}`);
         setLoading(false);
@@ -73,12 +70,52 @@ export default function InterviewPage() {
       console.error(error);
       alert("Failed to connect to AI backend");
     }
-
     setLoading(false);
+  };
+
+  // NEW: Day 11 Evaluate Answer Logic
+  const evaluateAnswer = async () => {
+    if (!transcript) {
+      return alert("Please record an answer first!");
+    }
+
+    setEvaluating(true);
+
+    try {
+      const response = await fetch(
+        "http://127.0.0.1:8000/evaluate-answer",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            question: questions[currentQuestion],
+            answer: transcript,
+          }),
+        }
+      );
+
+      const data = await response.json();
+      
+      if (data.error) {
+        alert(`Evaluation Error: ${data.error}`);
+      } else {
+        setFeedback(data.feedback);
+      }
+
+    } catch (error) {
+      console.error(error);
+      alert("Evaluation failed");
+    }
+
+    setEvaluating(false);
   };
 
   // Next Question
   const nextQuestion = () => {
+    // Clear the feedback for the next question
+    setFeedback("");
     resetTranscript();
 
     if (currentQuestion < questions.length - 1) {
@@ -89,15 +126,12 @@ export default function InterviewPage() {
     }
   };
 
-  // Format Timer
   const formatTime = () => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-
     return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
-  // If the browser hasn't loaded yet, render nothing (prevents server mismatch)
   if (!isMounted) return null;
 
   if (!browserSupportsSpeechRecognition) {
@@ -118,7 +152,7 @@ export default function InterviewPage() {
 
           <input
             type="text"
-            placeholder="Enter Role"
+            placeholder="Enter Role (e.g. SDE)"
             value={role}
             onChange={(e) => setRole(e.target.value)}
             className="bg-zinc-900 border border-zinc-700 p-4 rounded-xl w-[400px] mb-6 outline-none"
@@ -127,7 +161,7 @@ export default function InterviewPage() {
           <button
             onClick={generateInterview}
             disabled={loading}
-            className="bg-white text-black px-6 py-3 rounded-lg font-semibold hover:bg-gray-300"
+            className="bg-white text-black px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
           >
             {loading ? "Generating..." : "Generate Interview"}
           </button>
@@ -139,7 +173,6 @@ export default function InterviewPage() {
             <h1 className="text-3xl font-bold">
               AI Mock Interview
             </h1>
-
             <div className="bg-zinc-900 px-5 py-2 rounded-xl border border-zinc-700">
               ⏳ {formatTime()}
             </div>
@@ -150,7 +183,6 @@ export default function InterviewPage() {
             <h2 className="text-xl text-gray-400 mb-4">
               Question {currentQuestion + 1}
             </h2>
-
             <p className="text-2xl leading-relaxed">
               {questions[currentQuestion]}
             </p>
@@ -165,9 +197,7 @@ export default function InterviewPage() {
             <div className="flex gap-4 mb-6">
               <button
                 onClick={() =>
-                  SpeechRecognition.startListening({
-                    continuous: true,
-                  })
+                  SpeechRecognition.startListening({ continuous: true })
                 }
                 className="bg-green-600 px-5 py-3 rounded-lg font-semibold hover:bg-green-500 transition-colors"
               >
@@ -183,18 +213,41 @@ export default function InterviewPage() {
             </div>
 
             {/* Transcript */}
-            <div className="bg-black p-5 rounded-xl min-h-[150px] border border-zinc-700">
+            <div className="bg-black p-5 rounded-xl min-h-[150px] border border-zinc-700 mb-6">
               <p className="text-gray-300 whitespace-pre-wrap">
                 {transcript || "Your spoken answer will appear here..."}
               </p>
             </div>
+            
+            {/* NEW: Day 11 Feedback UI */}
+            {feedback && (
+              <div className="mt-8 mb-6 bg-zinc-950 border border-zinc-700 p-6 rounded-2xl">
+                <h2 className="text-2xl font-bold mb-4 text-blue-400">
+                  AI Feedback & Score
+                </h2>
+                <p className="whitespace-pre-wrap text-gray-300 leading-relaxed">
+                  {feedback}
+                </p>
+              </div>
+            )}
 
-            <button
-              onClick={nextQuestion}
-              className="mt-8 bg-white text-black px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
-            >
-              Next Question
-            </button>
+            <div className="flex gap-4">
+              {/* NEW: Day 11 Evaluate Button */}
+              <button
+                onClick={evaluateAnswer}
+                disabled={evaluating}
+                className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-500 disabled:opacity-50 transition-colors"
+              >
+                {evaluating ? "Evaluating..." : "Get AI Feedback"}
+              </button>
+
+              <button
+                onClick={nextQuestion}
+                className="bg-white text-black px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+              >
+                Next Question
+              </button>
+            </div>
           </div>
         </div>
       )}
