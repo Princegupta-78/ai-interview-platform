@@ -1,26 +1,26 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import SpeechRecognition, {
   useSpeechRecognition,
 } from "react-speech-recognition";
 
 export default function InterviewPage() {
+  // --- STATES ---
   const [role, setRole] = useState("");
   const [questions, setQuestions] = useState<string[]>([]);
   const [started, setStarted] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [loading, setLoading] = useState(false);
-
-  // NEW: Day 11 Evaluation States
   const [feedback, setFeedback] = useState("");
   const [evaluating, setEvaluating] = useState(false);
-
-  // Timer state
   const [seconds, setSeconds] = useState(0);
   const [isMounted, setIsMounted] = useState(false);
 
-  // Speech Recognition
+  // --- REFS (For Webcam) ---
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  // --- HOOKS ---
   const {
     transcript,
     resetTranscript,
@@ -43,7 +43,41 @@ export default function InterviewPage() {
     return () => clearInterval(timer);
   }, [started]);
 
-  // Generate Questions
+  // Webcam Logic
+  useEffect(() => {
+    // Only turn the camera on when the interview actually starts
+    if (started) {
+      startWebcam();
+    }
+    
+    // Cleanup: Turn off the camera when the component unmounts
+    return () => {
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        const tracks = stream.getTracks();
+        tracks.forEach(track => track.stop());
+      }
+    };
+  }, [started]);
+
+  const startWebcam = async () => {
+    try {
+      // Ask the browser for camera permission
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false, // We use SpeechRecognition for audio, not the video feed
+      });
+      
+      // Hook the video stream to our HTML video element
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (error) {
+      console.error("Webcam access denied:", error);
+    }
+  };
+
+  // --- API CALLS ---
   const generateInterview = async () => {
     if (!role) return alert("Please enter a role first!");
     setLoading(true);
@@ -73,28 +107,23 @@ export default function InterviewPage() {
     setLoading(false);
   };
 
-  // NEW: Day 11 Evaluate Answer Logic
   const evaluateAnswer = async () => {
     if (!transcript) {
       return alert("Please record an answer first!");
     }
-
     setEvaluating(true);
 
     try {
-      const response = await fetch(
-        "http://127.0.0.1:8000/evaluate-answer",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            question: questions[currentQuestion],
-            answer: transcript,
-          }),
-        }
-      );
+      const response = await fetch("http://127.0.0.1:8000/evaluate-answer", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          question: questions[currentQuestion],
+          answer: transcript,
+        }),
+      });
 
       const data = await response.json();
       
@@ -103,18 +132,15 @@ export default function InterviewPage() {
       } else {
         setFeedback(data.feedback);
       }
-
     } catch (error) {
       console.error(error);
       alert("Evaluation failed");
     }
-
     setEvaluating(false);
   };
 
-  // Next Question
+  // --- HELPERS ---
   const nextQuestion = () => {
-    // Clear the feedback for the next question
     setFeedback("");
     resetTranscript();
 
@@ -132,6 +158,7 @@ export default function InterviewPage() {
     return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
+  // --- RENDER ---
   if (!isMounted) return null;
 
   if (!browserSupportsSpeechRecognition) {
@@ -149,7 +176,6 @@ export default function InterviewPage() {
           <h1 className="text-5xl font-bold mb-8">
             AI Interview Generator
           </h1>
-
           <input
             type="text"
             placeholder="Enter Role (e.g. SDE)"
@@ -157,7 +183,6 @@ export default function InterviewPage() {
             onChange={(e) => setRole(e.target.value)}
             className="bg-zinc-900 border border-zinc-700 p-4 rounded-xl w-[400px] mb-6 outline-none"
           />
-
           <button
             onClick={generateInterview}
             disabled={loading}
@@ -167,88 +192,107 @@ export default function InterviewPage() {
           </button>
         </div>
       ) : (
-        <div className="max-w-4xl mx-auto">
-          {/* Top Bar */}
-          <div className="flex justify-between items-center mb-10">
-            <h1 className="text-3xl font-bold">
-              AI Mock Interview
-            </h1>
-            <div className="bg-zinc-900 px-5 py-2 rounded-xl border border-zinc-700">
-              ⏳ {formatTime()}
-            </div>
-          </div>
-
-          {/* Question */}
-          <div className="bg-zinc-900 p-8 rounded-2xl border border-zinc-800 mb-8">
-            <h2 className="text-xl text-gray-400 mb-4">
-              Question {currentQuestion + 1}
-            </h2>
-            <p className="text-2xl leading-relaxed">
-              {questions[currentQuestion]}
-            </p>
-          </div>
-
-          {/* Recording Section */}
-          <div className="bg-zinc-900 p-8 rounded-2xl border border-zinc-800">
-            <h2 className="text-xl font-semibold mb-6">
-              Your Answer
-            </h2>
-
-            <div className="flex gap-4 mb-6">
-              <button
-                onClick={() =>
-                  SpeechRecognition.startListening({ continuous: true })
-                }
-                className="bg-green-600 px-5 py-3 rounded-lg font-semibold hover:bg-green-500 transition-colors"
-              >
-                🎤 Start Recording
-              </button>
-
-              <button
-                onClick={SpeechRecognition.stopListening}
-                className="bg-red-600 px-5 py-3 rounded-lg font-semibold hover:bg-red-500 transition-colors"
-              >
-                ⏹ Stop Recording
-              </button>
+        // NEW: Day 12 Split Screen Grid
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* LEFT SIDE: Interview Content */}
+          <div className="lg:col-span-2">
+            <div className="flex justify-between items-center mb-10">
+              <h1 className="text-3xl font-bold">AI Mock Interview</h1>
+              <div className="bg-zinc-900 px-5 py-2 rounded-xl border border-zinc-700">
+                ⏳ {formatTime()}
+              </div>
             </div>
 
-            {/* Transcript */}
-            <div className="bg-black p-5 rounded-xl min-h-[150px] border border-zinc-700 mb-6">
-              <p className="text-gray-300 whitespace-pre-wrap">
-                {transcript || "Your spoken answer will appear here..."}
+            <div className="bg-zinc-900 p-8 rounded-2xl border border-zinc-800 mb-8">
+              <h2 className="text-xl text-gray-400 mb-4">
+                Question {currentQuestion + 1}
+              </h2>
+              <p className="text-2xl leading-relaxed">
+                {questions[currentQuestion]}
               </p>
             </div>
-            
-            {/* NEW: Day 11 Feedback UI */}
-            {feedback && (
-              <div className="mt-8 mb-6 bg-zinc-950 border border-zinc-700 p-6 rounded-2xl">
-                <h2 className="text-2xl font-bold mb-4 text-blue-400">
-                  AI Feedback & Score
-                </h2>
-                <p className="whitespace-pre-wrap text-gray-300 leading-relaxed">
-                  {feedback}
+
+            <div className="bg-zinc-900 p-8 rounded-2xl border border-zinc-800">
+              <h2 className="text-xl font-semibold mb-6">Your Answer</h2>
+              <div className="flex gap-4 mb-6">
+                <button
+                  onClick={() => SpeechRecognition.startListening({ continuous: true })}
+                  className="bg-green-600 px-5 py-3 rounded-lg font-semibold hover:bg-green-500 transition-colors"
+                >
+                  🎤 Start Recording
+                </button>
+                <button
+                  onClick={SpeechRecognition.stopListening}
+                  className="bg-red-600 px-5 py-3 rounded-lg font-semibold hover:bg-red-500 transition-colors"
+                >
+                  ⏹ Stop Recording
+                </button>
+              </div>
+
+              <div className="bg-black p-5 rounded-xl min-h-[150px] border border-zinc-700 mb-6">
+                <p className="text-gray-300 whitespace-pre-wrap">
+                  {transcript || "Your spoken answer will appear here..."}
                 </p>
               </div>
-            )}
+              
+              {feedback && (
+                <div className="mt-8 mb-6 bg-zinc-950 border border-zinc-700 p-6 rounded-2xl">
+                  <h2 className="text-2xl font-bold mb-4 text-blue-400">
+                    AI Feedback & Score
+                  </h2>
+                  <p className="whitespace-pre-wrap text-gray-300 leading-relaxed">
+                    {feedback}
+                  </p>
+                </div>
+              )}
 
-            <div className="flex gap-4">
-              {/* NEW: Day 11 Evaluate Button */}
-              <button
-                onClick={evaluateAnswer}
-                disabled={evaluating}
-                className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-500 disabled:opacity-50 transition-colors"
-              >
-                {evaluating ? "Evaluating..." : "Get AI Feedback"}
-              </button>
-
-              <button
-                onClick={nextQuestion}
-                className="bg-white text-black px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
-              >
-                Next Question
-              </button>
+              <div className="flex gap-4">
+                <button
+                  onClick={evaluateAnswer}
+                  disabled={evaluating}
+                  className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-500 disabled:opacity-50 transition-colors"
+                >
+                  {evaluating ? "Evaluating..." : "Get AI Feedback"}
+                </button>
+                <button
+                  onClick={nextQuestion}
+                  className="bg-white text-black px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                >
+                  Next Question
+                </button>
+              </div>
             </div>
           </div>
+
+          {/* RIGHT SIDE: Webcam Panel */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 h-fit sticky top-10">
+            <h2 className="text-2xl font-bold mb-4">Live Interview</h2>
+            
+            <div className="rounded-2xl overflow-hidden border border-zinc-700 bg-black relative">
+              <video
+                ref={videoRef}
+                autoPlay
+                muted
+                playsInline
+                // The scale-x-[-1] class mirrors the video so it feels natural!
+                className="w-full h-[350px] object-cover transform scale-x-[-1]"
+              />
+            </div>
+
+            <div className="mt-5 space-y-3">
+              <div className="bg-black border border-zinc-700 rounded-xl p-4">
+                <p className="text-gray-400 text-sm mb-1">Status</p>
+                <p className="text-green-400 font-semibold">● Interview Active</p>
+              </div>
+
+              <div className="bg-black border border-zinc-700 rounded-xl p-4">
+                <p className="text-gray-400 text-sm mb-1">AI Analysis</p>
+                <p className="text-white">Monitoring communication confidence...</p>
+              </div>
+            </div>
+          </div>
+
         </div>
       )}
     </div>
