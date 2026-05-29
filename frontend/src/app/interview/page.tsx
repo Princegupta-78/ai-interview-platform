@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import SpeechRecognition, {
   useSpeechRecognition,
 } from "react-speech-recognition";
+import jsPDF from "jspdf"; // NEW: PDF Library
 
 export default function InterviewPage() {
   // --- STATES ---
@@ -16,6 +17,10 @@ export default function InterviewPage() {
   const [evaluating, setEvaluating] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [isMounted, setIsMounted] = useState(false);
+
+  // NEW: Day 17 States
+  const [interviewCompleted, setInterviewCompleted] = useState(false);
+  const [finalScore, setFinalScore] = useState(84); // Hardcoded for now, dynamic later!
 
   // --- REFS ---
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -34,17 +39,17 @@ export default function InterviewPage() {
   // Timer Logic
   useEffect(() => {
     let timer: NodeJS.Timeout;
-    if (started) {
+    if (started && !interviewCompleted) {
       timer = setInterval(() => {
         setSeconds((prev) => prev + 1);
       }, 1000);
     }
     return () => clearInterval(timer);
-  }, [started]);
+  }, [started, interviewCompleted]);
 
   // Webcam Logic
   useEffect(() => {
-    if (started) {
+    if (started && !interviewCompleted) {
       startWebcam();
     }
     return () => {
@@ -54,7 +59,7 @@ export default function InterviewPage() {
         tracks.forEach(track => track.stop());
       }
     };
-  }, [started]);
+  }, [started, interviewCompleted]);
 
   const startWebcam = async () => {
     try {
@@ -70,12 +75,31 @@ export default function InterviewPage() {
     }
   };
 
+  // --- DAY 17: PDF DOWNLOADER ---
+  const downloadReport = () => {
+    const doc = new jsPDF();
+
+    doc.setFontSize(22);
+    doc.text("AI Interview Report", 20, 20);
+    
+    doc.setFontSize(14);
+    doc.text(`Final Score: ${finalScore}%`, 20, 40);
+    doc.text("Communication: Good", 20, 55);
+    doc.text("Technical Skills: Strong", 20, 70);
+    doc.text("Confidence: Moderate", 20, 85);
+    
+    doc.text("Suggestions:", 20, 105);
+    doc.text("- Improve system design answers", 30, 120);
+    doc.text("- Practice concise communication", 30, 135);
+
+    doc.save("AI_Interview_Report.pdf");
+  };
+
   // --- DAY 13: TEXT-TO-SPEECH ---
   const speakQuestion = () => {
     if ('speechSynthesis' in window) {
       const synth = window.speechSynthesis;
       synth.cancel(); 
-      
       const utterance = new SpeechSynthesisUtterance(questions[currentQuestion]);
       utterance.rate = 0.95; 
       utterance.pitch = 1;
@@ -115,20 +139,14 @@ export default function InterviewPage() {
     setLoading(false);
   };
 
-  // --- DAY 14: EVALUATE & SAVE TO POSTGRESQL ---
   const evaluateAnswer = async () => {
-    if (!transcript) {
-      return alert("Please record an answer first!");
-    }
+    if (!transcript) return alert("Please record an answer first!");
     setEvaluating(true);
 
     try {
-      // 1. Fetch AI Review Analysis from Gemini
       const response = await fetch("http://127.0.0.1:8000/evaluate-answer", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           question: questions[currentQuestion],
           answer: transcript,
@@ -136,22 +154,17 @@ export default function InterviewPage() {
       });
 
       const data = await response.json();
-      
       if (data.error) {
         alert(`Evaluation Error: ${data.error}`);
         setEvaluating(false);
         return;
       }
 
-      // Render the response to our UI
       setFeedback(data.feedback);
 
-      // 2. Chained Data Write: Persist the session to PostgreSQL
       await fetch("http://127.0.0.1:8000/save-interview", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           role: role,
           question: questions[currentQuestion],
@@ -167,7 +180,6 @@ export default function InterviewPage() {
     setEvaluating(false);
   };
 
-  // --- HELPERS ---
   const nextQuestion = () => {
     setFeedback("");
     resetTranscript();
@@ -177,7 +189,8 @@ export default function InterviewPage() {
       setCurrentQuestion(currentQuestion + 1);
     } else {
       SpeechRecognition.stopListening();
-      alert("Interview Completed");
+      // NEW: Trigger the report screen instead of an alert
+      setInterviewCompleted(true);
     }
   };
 
@@ -189,39 +202,76 @@ export default function InterviewPage() {
 
   if (!isMounted) return null;
   if (!browserSupportsSpeechRecognition) {
-    return (
-      <div className="text-white p-10">
-        Browser does not support speech recognition.
-      </div>
-    );
+    return <div className="text-white p-10">Browser does not support speech recognition.</div>;
   }
 
+  // --- MAIN RENDER ---
   return (
     <div className="min-h-screen bg-black text-white p-10">
-      {!started ? (
+      
+      {/* 1. REPORT SCREEN */}
+      {interviewCompleted ? (
+        <div className="max-w-3xl mx-auto mt-10">
+          <h1 className="text-5xl font-bold mb-10">Interview Report</h1>
+          <div className="bg-zinc-900 p-8 rounded-2xl border border-zinc-800">
+            <div className="space-y-4">
+              <p className="text-2xl">
+                Final Score: <span className="text-green-400 font-bold ml-3">{finalScore}%</span>
+              </p>
+              <p className="text-xl">
+                Communication: <span className="ml-3 text-blue-400">Good</span>
+              </p>
+              <p className="text-xl">
+                Technical Skills: <span className="ml-3 text-green-400">Strong</span>
+              </p>
+              <p className="text-xl">
+                Confidence: <span className="ml-3 text-yellow-400">Moderate</span>
+              </p>
+            </div>
+
+            <div className="mt-10">
+              <h2 className="text-2xl font-bold mb-4">AI Suggestions</h2>
+              <ul className="space-y-3 text-gray-300">
+                <li>• Improve system design answers</li>
+                <li>• Practice concise communication</li>
+                <li>• Maintain eye contact during webcam interview</li>
+              </ul>
+            </div>
+
+            <button
+              onClick={downloadReport}
+              className="mt-10 bg-white text-black px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+            >
+              Download PDF Report
+            </button>
+          </div>
+        </div>
+
+      /* 2. START SCREEN */
+      ) : !started ? (
         <div className="flex flex-col items-center justify-center h-[80vh]">
-          <h1 className="text-5xl font-bold mb-8">
-            AI Interview Generator
-          </h1>
+          <h1 className="text-5xl font-bold mb-8">AI Interview Generator</h1>
           <input
             type="text"
             placeholder="Enter Role (e.g. SDE)"
             value={role}
             onChange={(e) => setRole(e.target.value)}
-            className="bg-zinc-900 border border-zinc-700 p-4 rounded-xl w-[400px] mb-6 outline-none"
+            className="bg-zinc-900 border border-zinc-700 p-4 rounded-xl w-[400px] mb-6 outline-none focus:border-indigo-500 transition-colors"
           />
           <button
             onClick={generateInterview}
             disabled={loading}
-            className="bg-white text-black px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+            className="bg-white text-black px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors disabled:opacity-50"
           >
             {loading ? "Generating..." : "Generate Interview"}
           </button>
         </div>
+
+      /* 3. ACTIVE INTERVIEW SCREEN */
       ) : (
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          {/* LEFT SIDE: Interview Content */}
+          {/* LEFT SIDE: Content */}
           <div className="lg:col-span-2">
             <div className="flex justify-between items-center mb-10">
               <h1 className="text-3xl font-bold">AI Mock Interview</h1>
@@ -232,7 +282,7 @@ export default function InterviewPage() {
 
             <div className="bg-zinc-900 p-8 rounded-2xl border border-zinc-800 mb-8">
               <h2 className="text-xl text-gray-400 mb-4">
-                Question {currentQuestion + 1}
+                Question {currentQuestion + 1} of {questions.length}
               </h2>
               <p className="text-2xl leading-relaxed mb-6">
                 {questions[currentQuestion]}
@@ -292,7 +342,7 @@ export default function InterviewPage() {
                   onClick={nextQuestion}
                   className="bg-white text-black px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
                 >
-                  Next Question
+                  {currentQuestion < questions.length - 1 ? "Next Question" : "Finish Interview"}
                 </button>
               </div>
             </div>
@@ -316,11 +366,6 @@ export default function InterviewPage() {
               <div className="bg-black border border-zinc-700 rounded-xl p-4">
                 <p className="text-gray-400 text-sm mb-1">Status</p>
                 <p className="text-green-400 font-semibold">● Interview Active</p>
-              </div>
-
-              <div className="bg-black border border-zinc-700 rounded-xl p-4">
-                <p className="text-gray-400 text-sm mb-1">AI Analysis</p>
-                <p className="text-white">Monitoring communication confidence...</p>
               </div>
             </div>
           </div>
