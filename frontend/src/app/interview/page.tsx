@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import SpeechRecognition, {
   useSpeechRecognition,
 } from "react-speech-recognition";
-import jsPDF from "jspdf"; // NEW: PDF Library
+import jsPDF from "jspdf";
 
 export default function InterviewPage() {
   // --- STATES ---
@@ -18,9 +18,9 @@ export default function InterviewPage() {
   const [seconds, setSeconds] = useState(0);
   const [isMounted, setIsMounted] = useState(false);
 
-  // NEW: Day 17 States
+  // --- DAY 18: DYNAMIC SCORING STATES ---
   const [interviewCompleted, setInterviewCompleted] = useState(false);
-  const [finalScore, setFinalScore] = useState(84); // Hardcoded for now, dynamic later!
+  const [finalScore, setFinalScore] = useState(0);
 
   // --- REFS ---
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -75,27 +75,37 @@ export default function InterviewPage() {
     }
   };
 
-  // --- DAY 17: PDF DOWNLOADER ---
+  // --- PDF DOWNLOADER ---
   const downloadReport = () => {
     const doc = new jsPDF();
-
     doc.setFontSize(22);
     doc.text("AI Interview Report", 20, 20);
-    
     doc.setFontSize(14);
-    doc.text(`Final Score: ${finalScore}%`, 20, 40);
-    doc.text("Communication: Good", 20, 55);
-    doc.text("Technical Skills: Strong", 20, 70);
-    doc.text("Confidence: Moderate", 20, 85);
     
-    doc.text("Suggestions:", 20, 105);
-    doc.text("- Improve system design answers", 30, 120);
-    doc.text("- Practice concise communication", 30, 135);
+    // Dynamically inject the real score into the PDF
+    doc.text(`Final Score: ${finalScore}%`, 20, 40);
+    
+    // Safe extraction for PDF
+    const comm = feedback.includes("COMMUNICATION:") ? feedback.split("COMMUNICATION:")[1].split("\n")[0].trim() : "N/A";
+    const tech = feedback.includes("TECHNICAL_SKILL:") ? feedback.split("TECHNICAL_SKILL:")[1].split("\n")[0].trim() : "N/A";
+    const conf = feedback.includes("CONFIDENCE:") ? feedback.split("CONFIDENCE:")[1].split("\n")[0].trim() : "N/A";
+    
+    doc.text(`Communication: ${comm}`, 20, 55);
+    doc.text(`Technical Skills: ${tech}`, 20, 70);
+    doc.text(`Confidence: ${conf}`, 20, 85);
+    
+    doc.text("AI Detailed Feedback:", 20, 105);
+    
+    // Extract just the paragraph feedback for the PDF
+    const rawFeedback = feedback.includes("FEEDBACK:") ? feedback.split("FEEDBACK:")[1].trim() : feedback;
+    
+    // Word wrap the feedback so it doesn't run off the PDF page
+    const splitFeedback = doc.splitTextToSize(rawFeedback, 170);
+    doc.text(splitFeedback, 20, 120);
 
     doc.save("AI_Interview_Report.pdf");
   };
 
-  // --- DAY 13: TEXT-TO-SPEECH ---
   const speakQuestion = () => {
     if ('speechSynthesis' in window) {
       const synth = window.speechSynthesis;
@@ -113,23 +123,15 @@ export default function InterviewPage() {
   const generateInterview = async () => {
     if (!role) return alert("Please enter a role first!");
     setLoading(true);
-
     try {
-      const response = await fetch(
-        `http://127.0.0.1:8000/generate-questions?role=${role}`
-      );
+      const response = await fetch(`http://127.0.0.1:8000/generate-questions?role=${role}`);
       const data = await response.json();
-      
       if (data.error) {
         alert(`Backend Error: ${data.error}`);
         setLoading(false);
         return; 
       }
-
-      const parsedQuestions = data.questions
-        .split("\n")
-        .filter((q: string) => q.trim() !== "");
-
+      const parsedQuestions = data.questions.split("\n").filter((q: string) => q.trim() !== "");
       setQuestions(parsedQuestions);
       setStarted(true);
     } catch (error) {
@@ -160,7 +162,14 @@ export default function InterviewPage() {
         return;
       }
 
+      // Render raw text to UI
       setFeedback(data.feedback);
+
+      // --- DAY 18: REGEX SCORE EXTRACTION ---
+      const scoreMatch = data.feedback.match(/SCORE:\s*(\d+)/);
+      if (scoreMatch) {
+        setFinalScore(parseInt(scoreMatch[1]));
+      }
 
       await fetch("http://127.0.0.1:8000/save-interview", {
         method: "POST",
@@ -181,15 +190,16 @@ export default function InterviewPage() {
   };
 
   const nextQuestion = () => {
-    setFeedback("");
     resetTranscript();
     window.speechSynthesis.cancel(); 
 
     if (currentQuestion < questions.length - 1) {
+      // Only clear the feedback if we are moving to a NEW question
+      setFeedback("");
       setCurrentQuestion(currentQuestion + 1);
     } else {
+      // If we are finishing the interview, DO NOT clear the feedback!
       SpeechRecognition.stopListening();
-      // NEW: Trigger the report screen instead of an alert
       setInterviewCompleted(true);
     }
   };
@@ -209,7 +219,7 @@ export default function InterviewPage() {
   return (
     <div className="min-h-screen bg-black text-white p-10">
       
-      {/* 1. REPORT SCREEN */}
+      {/* 1. REPORT SCREEN (DAY 18 DYNAMIC UI) */}
       {interviewCompleted ? (
         <div className="max-w-3xl mx-auto mt-10">
           <h1 className="text-5xl font-bold mb-10">Interview Report</h1>
@@ -218,24 +228,42 @@ export default function InterviewPage() {
               <p className="text-2xl">
                 Final Score: <span className="text-green-400 font-bold ml-3">{finalScore}%</span>
               </p>
+              
               <p className="text-xl">
-                Communication: <span className="ml-3 text-blue-400">Good</span>
+                Communication:
+                <span className="ml-3 text-blue-400 font-semibold">
+                  {feedback.includes("COMMUNICATION:")
+                    ? feedback.split("COMMUNICATION:")[1].split("\n")[0].trim()
+                    : "N/A"}
+                </span>
               </p>
+
               <p className="text-xl">
-                Technical Skills: <span className="ml-3 text-green-400">Strong</span>
+                Technical Skills:
+                <span className="ml-3 text-green-400 font-semibold">
+                  {feedback.includes("TECHNICAL_SKILL:")
+                    ? feedback.split("TECHNICAL_SKILL:")[1].split("\n")[0].trim()
+                    : "N/A"}
+                </span>
               </p>
+
               <p className="text-xl">
-                Confidence: <span className="ml-3 text-yellow-400">Moderate</span>
+                Confidence:
+                <span className="ml-3 text-yellow-400 font-semibold">
+                  {feedback.includes("CONFIDENCE:")
+                    ? feedback.split("CONFIDENCE:")[1].split("\n")[0].trim()
+                    : "N/A"}
+                </span>
               </p>
             </div>
 
             <div className="mt-10">
-              <h2 className="text-2xl font-bold mb-4">AI Suggestions</h2>
-              <ul className="space-y-3 text-gray-300">
-                <li>• Improve system design answers</li>
-                <li>• Practice concise communication</li>
-                <li>• Maintain eye contact during webcam interview</li>
-              </ul>
+              <h2 className="text-2xl font-bold mb-4">AI Detailed Feedback</h2>
+              <div className="bg-black border border-zinc-700 rounded-xl p-5 whitespace-pre-wrap text-gray-300 leading-relaxed">
+                {feedback.includes("FEEDBACK:") 
+                  ? feedback.split("FEEDBACK:")[1].trim() 
+                  : feedback}
+              </div>
             </div>
 
             <button
@@ -270,8 +298,6 @@ export default function InterviewPage() {
       /* 3. ACTIVE INTERVIEW SCREEN */
       ) : (
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* LEFT SIDE: Content */}
           <div className="lg:col-span-2">
             <div className="flex justify-between items-center mb-10">
               <h1 className="text-3xl font-bold">AI Mock Interview</h1>
@@ -324,9 +350,9 @@ export default function InterviewPage() {
                   <h2 className="text-2xl font-bold mb-4 text-blue-400">
                     AI Feedback & Score
                   </h2>
-                  <p className="whitespace-pre-wrap text-gray-300 leading-relaxed">
+                  <div className="whitespace-pre-wrap text-gray-300 leading-relaxed font-mono text-sm bg-black p-4 rounded-lg border border-zinc-800">
                     {feedback}
-                  </p>
+                  </div>
                 </div>
               )}
 
@@ -348,10 +374,8 @@ export default function InterviewPage() {
             </div>
           </div>
 
-          {/* RIGHT SIDE: Webcam Panel */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 h-fit sticky top-10">
             <h2 className="text-2xl font-bold mb-4">Live Interview</h2>
-            
             <div className="rounded-2xl overflow-hidden border border-zinc-700 bg-black relative">
               <video
                 ref={videoRef}
@@ -361,7 +385,6 @@ export default function InterviewPage() {
                 className="w-full h-[350px] object-cover transform scale-x-[-1]"
               />
             </div>
-
             <div className="mt-5 space-y-3">
               <div className="bg-black border border-zinc-700 rounded-xl p-4">
                 <p className="text-gray-400 text-sm mb-1">Status</p>

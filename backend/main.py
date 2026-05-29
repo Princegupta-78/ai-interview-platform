@@ -92,6 +92,7 @@ def generate_questions(role: str):
         return {"error": str(e)}
 
 # --- EVALUATE ANSWER ---
+# --- EVALUATE ANSWER (DAY 18 UPGRADE) ---
 class EvaluationRequest(BaseModel):
     question: str
     answer: str
@@ -99,16 +100,25 @@ class EvaluationRequest(BaseModel):
 @app.post("/evaluate-answer")
 def evaluate_answer(req: EvaluationRequest):
     prompt = f"""
-    You are a professional technical interviewer.
-    Interview Question: {req.question}
-    Candidate Answer: {req.answer}
-    Evaluate the answer professionally.
-    Give:
-    1. Score out of 10
-    2. Strengths
-    3. Weaknesses
-    4. Final feedback
-    Keep response concise and readable.
+    You are an expert technical interviewer.
+
+    Interview Question:
+    {req.question}
+
+    Candidate Answer:
+    {req.answer}
+
+    Analyze the answer professionally.
+
+    Return STRICTLY in this exact format:
+
+    SCORE: [number out of 100]
+    TECHNICAL_SKILL: [rating]
+    COMMUNICATION: [rating]
+    CONFIDENCE: [rating]
+    FEEDBACK: [short paragraph]
+
+    If the answer is empty or weak, give a low score honestly.
     """
     try:
         model = genai.GenerativeModel('gemini-2.5-flash')
