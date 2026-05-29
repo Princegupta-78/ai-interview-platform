@@ -5,16 +5,19 @@ import google.generativeai as genai
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from passlib.context import CryptContext
 from pydantic import BaseModel
 from pypdf import PdfReader
+from fastapi.security import OAuth2PasswordBearer
 
+# Database and Models
 from database import SessionLocal, engine, Base
 from models.user import User
 from models.interview import Interview
 from schemas.user import UserCreate, UserLogin
 
-# Automatically generates all registered database tables on app launch
+# --- DAY 19: IMPORT NEW AUTHENTICATION ENGINE ---
+from auth import hash_password, verify_password, create_access_token
+
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
@@ -27,12 +30,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize Gemini
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-
-# Initialize encryption engine
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def get_db():
     db = SessionLocal()
@@ -41,43 +40,61 @@ def get_db():
     finally:
         db.close()
 
+# --- DAY 19: JWT SECURITY SCHEME ---
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
 @app.get("/")
 def home():
     return {"message": "Backend Running"}
 
+# --- SECURE SIGNUP ---
 @app.post("/signup")
 def signup(user: UserCreate, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(User.email == user.email).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already exists")
 
-    hashed_password = pwd_context.hash(user.password)
-    new_user = User(name=user.name, email=user.email, password=hashed_password)
+    # Passwords are now hashed via auth.py
+    hashed_pw = hash_password(user.password)
+    new_user = User(name=user.name, email=user.email, password=hashed_pw)
+    
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
     return {"message": "User created successfully"}
 
+# --- SECURE LOGIN (RETURNS JWT TOKEN) ---
 @app.post("/login")
-def login(user: UserLogin, db: Session = Depends(get_db)):
-    existing_user = db.query(User).filter(User.email == user.email).first()
-    if not existing_user:
-        raise HTTPException(status_code=400, detail="Invalid email")
+def login(data: UserLogin, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == data.email).first()
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email")
 
-    valid_password = pwd_context.verify(user.password, existing_user.password)
-    if not valid_password:
-        raise HTTPException(status_code=400, detail="Invalid password")
+    if not verify_password(data.password, user.password):
+        raise HTTPException(status_code=401, detail="Invalid password")
+
+    # Generate the cryptographic token
+    access_token = create_access_token(data={"sub": user.email})
 
     return {
         "message": "Login successful",
-        "user": {
-            "id": existing_user.id,
-            "name": existing_user.name,
-            "email": existing_user.email
-        }
+        "token": access_token
     }
 
-# --- GENERATE QUESTIONS ---
+# --- NEW DAY 19 TEST ROUTE: PROTECTED API ---
+@app.get("/protected")
+def protected_route(token: str = Depends(oauth2_scheme)):
+    # If the user doesn't pass a valid token, FastAPI blocks them automatically!
+    return {
+        "message": "Protected route access granted",
+        "token": token
+    }
+
+# ==========================================
+# (PREVIOUS FEATURES: AI, RESUMES, DB SAVING)
+# ==========================================
+
 @app.get("/generate-questions")
 def generate_questions(role: str):
     prompt = f"""
@@ -91,8 +108,6 @@ def generate_questions(role: str):
     except Exception as e:
         return {"error": str(e)}
 
-# --- EVALUATE ANSWER ---
-# --- EVALUATE ANSWER (DAY 18 UPGRADE) ---
 class EvaluationRequest(BaseModel):
     question: str
     answer: str
@@ -101,15 +116,9 @@ class EvaluationRequest(BaseModel):
 def evaluate_answer(req: EvaluationRequest):
     prompt = f"""
     You are an expert technical interviewer.
-
-    Interview Question:
-    {req.question}
-
-    Candidate Answer:
-    {req.answer}
-
+    Interview Question: {req.question}
+    Candidate Answer: {req.answer}
     Analyze the answer professionally.
-
     Return STRICTLY in this exact format:
 
     SCORE: [number out of 100]
@@ -127,7 +136,6 @@ def evaluate_answer(req: EvaluationRequest):
     except Exception as e:
         return {"error": str(e)}
 
-# --- DATA PERSISTENCE SCHEMAS & ENDPOINTS ---
 class InterviewSaveRequest(BaseModel):
     role: str
     question: str
@@ -154,7 +162,6 @@ def save_interview(req: InterviewSaveRequest, db: Session = Depends(get_db)):
 def get_interview_history(db: Session = Depends(get_db)):
     return db.query(Interview).order_by(Interview.id.desc()).all()
 
-# --- ANALYTICS DASHBOARD ---
 @app.get("/analytics")
 def get_analytics():
     return {
@@ -165,16 +172,13 @@ def get_analytics():
         "weakest_skill": "System Design"
     }
 
-# --- DAY 16: RESUME ANALYZER ---
 @app.post("/analyze-resume")
 async def analyze_resume(file: UploadFile = File(...)):
-    # Save uploaded PDF temporarily
     temp = tempfile.NamedTemporaryFile(delete=False)
     contents = await file.read()
     temp.write(contents)
     temp.close()
 
-    # Read PDF text
     reader = PdfReader(temp.name)
     text = ""
     for page in reader.pages:
@@ -182,10 +186,8 @@ async def analyze_resume(file: UploadFile = File(...)):
         if extracted:
             text += extracted
             
-    # Cleanup temp file
     os.unlink(temp.name)
 
-    # Dummy AI analysis for now (we will hook this to Gemini next!)
     analysis = f"""
 Resume Analysis:
 
@@ -204,5 +206,4 @@ Resume Analysis:
 **Resume Content Preview:**
 {text[:500]}...
     """
-    
     return {"analysis": analysis}

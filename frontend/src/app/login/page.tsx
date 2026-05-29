@@ -27,14 +27,12 @@ export default function LoginPage() {
 
     // 2. If the backend says the password matches...
     if (response.ok) {
-      // 3. Save the user data inside the browser's permanent memory
-      localStorage.setItem("user", JSON.stringify(data.user));
+      // We now capture the JWT token passed back from the FastAPI server
+      localStorage.setItem("token", data.token);
       
-      alert("Login successful!");
-      
-      // 4. Redirect them to the protected dashboard
+      alert("Login Successful!");
       router.push("/dashboard");
-    } else {
+    }else {
       // If password/email is wrong, show the FastAPI error message
       alert(data.detail);
     }
