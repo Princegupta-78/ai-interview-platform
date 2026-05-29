@@ -142,3 +142,15 @@ def save_interview(req: InterviewSaveRequest, db: Session = Depends(get_db)):
 def get_interview_history(db: Session = Depends(get_db)):
     # Returns historic attempts descending by auto-incrementing ID
     return db.query(Interview).order_by(Interview.id.desc()).all()
+
+# --- DAY 15: ANALYTICS DASHBOARD ---
+@app.get("/analytics")
+def get_analytics():
+    # Mock data for UI development. Tomorrow we connect this to the PostgreSQL DB!
+    return {
+        "total_interviews": 12,
+        "average_score": 82,
+        "confidence": "Good",
+        "strongest_skill": "Data Structures & Algorithms",
+        "weakest_skill": "System Design"
+    }
