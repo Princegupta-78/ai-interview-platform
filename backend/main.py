@@ -1,15 +1,17 @@
 import os
+import tempfile
 from dotenv import load_dotenv
 import google.generativeai as genai
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 from pydantic import BaseModel
+from pypdf import PdfReader
 
 from database import SessionLocal, engine, Base
 from models.user import User
-from models.interview import Interview  # <-- Imported the new model
+from models.interview import Interview
 from schemas.user import UserCreate, UserLogin
 
 # Automatically generates all registered database tables on app launch
@@ -115,7 +117,7 @@ def evaluate_answer(req: EvaluationRequest):
     except Exception as e:
         return {"error": str(e)}
 
-# --- NEW: DAY 14 DATA PERSISTENCE SCHEMAS & ENDPOINTS ---
+# --- DATA PERSISTENCE SCHEMAS & ENDPOINTS ---
 class InterviewSaveRequest(BaseModel):
     role: str
     question: str
@@ -140,13 +142,11 @@ def save_interview(req: InterviewSaveRequest, db: Session = Depends(get_db)):
 
 @app.get("/interview-history")
 def get_interview_history(db: Session = Depends(get_db)):
-    # Returns historic attempts descending by auto-incrementing ID
     return db.query(Interview).order_by(Interview.id.desc()).all()
 
-# --- DAY 15: ANALYTICS DASHBOARD ---
+# --- ANALYTICS DASHBOARD ---
 @app.get("/analytics")
 def get_analytics():
-    # Mock data for UI development. Tomorrow we connect this to the PostgreSQL DB!
     return {
         "total_interviews": 12,
         "average_score": 82,
@@ -154,3 +154,45 @@ def get_analytics():
         "strongest_skill": "Data Structures & Algorithms",
         "weakest_skill": "System Design"
     }
+
+# --- DAY 16: RESUME ANALYZER ---
+@app.post("/analyze-resume")
+async def analyze_resume(file: UploadFile = File(...)):
+    # Save uploaded PDF temporarily
+    temp = tempfile.NamedTemporaryFile(delete=False)
+    contents = await file.read()
+    temp.write(contents)
+    temp.close()
+
+    # Read PDF text
+    reader = PdfReader(temp.name)
+    text = ""
+    for page in reader.pages:
+        extracted = page.extract_text()
+        if extracted:
+            text += extracted
+            
+    # Cleanup temp file
+    os.unlink(temp.name)
+
+    # Dummy AI analysis for now (we will hook this to Gemini next!)
+    analysis = f"""
+Resume Analysis:
+
+**Strong Points:**
+- Good technical exposure
+- Project experience detected
+
+**Improvements:**
+- Add more measurable achievements
+- Improve resume formatting
+
+**Suggested Roles:**
+- Frontend Developer
+- Software Engineer Intern
+
+**Resume Content Preview:**
+{text[:500]}...
+    """
+    
+    return {"analysis": analysis}
