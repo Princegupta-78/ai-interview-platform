@@ -17,7 +17,7 @@ export default function InterviewPage() {
   const [seconds, setSeconds] = useState(0);
   const [isMounted, setIsMounted] = useState(false);
 
-  // --- REFS (For Webcam) ---
+  // --- REFS ---
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   // --- HOOKS ---
@@ -27,7 +27,6 @@ export default function InterviewPage() {
     browserSupportsSpeechRecognition,
   } = useSpeechRecognition();
 
-  // Avoid Hydration errors
   useEffect(() => {
     setIsMounted(true);
   }, []);
@@ -45,12 +44,9 @@ export default function InterviewPage() {
 
   // Webcam Logic
   useEffect(() => {
-    // Only turn the camera on when the interview actually starts
     if (started) {
       startWebcam();
     }
-    
-    // Cleanup: Turn off the camera when the component unmounts
     return () => {
       if (videoRef.current && videoRef.current.srcObject) {
         const stream = videoRef.current.srcObject as MediaStream;
@@ -62,18 +58,31 @@ export default function InterviewPage() {
 
   const startWebcam = async () => {
     try {
-      // Ask the browser for camera permission
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
-        audio: false, // We use SpeechRecognition for audio, not the video feed
+        audio: false,
       });
-      
-      // Hook the video stream to our HTML video element
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
     } catch (error) {
       console.error("Webcam access denied:", error);
+    }
+  };
+
+  // --- DAY 13: TEXT-TO-SPEECH ---
+  const speakQuestion = () => {
+    if ('speechSynthesis' in window) {
+      const synth = window.speechSynthesis;
+      // Stop any currently speaking audio before starting a new one
+      synth.cancel(); 
+      
+      const utterance = new SpeechSynthesisUtterance(questions[currentQuestion]);
+      utterance.rate = 0.95; // Slightly slower for a more professional interview tone
+      utterance.pitch = 1;
+      synth.speak(utterance);
+    } else {
+      alert("Text-to-speech is not supported in this browser.");
     }
   };
 
@@ -143,6 +152,7 @@ export default function InterviewPage() {
   const nextQuestion = () => {
     setFeedback("");
     resetTranscript();
+    window.speechSynthesis.cancel(); // Stop speaking if user clicks next
 
     if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(currentQuestion + 1);
@@ -158,9 +168,7 @@ export default function InterviewPage() {
     return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
-  // --- RENDER ---
   if (!isMounted) return null;
-
   if (!browserSupportsSpeechRecognition) {
     return (
       <div className="text-white p-10">
@@ -192,7 +200,6 @@ export default function InterviewPage() {
           </button>
         </div>
       ) : (
-        // NEW: Day 12 Split Screen Grid
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           {/* LEFT SIDE: Interview Content */}
@@ -208,9 +215,17 @@ export default function InterviewPage() {
               <h2 className="text-xl text-gray-400 mb-4">
                 Question {currentQuestion + 1}
               </h2>
-              <p className="text-2xl leading-relaxed">
+              <p className="text-2xl leading-relaxed mb-6">
                 {questions[currentQuestion]}
               </p>
+              
+              {/* NEW: Day 13 Read Question Button */}
+              <button
+                onClick={speakQuestion}
+                className="bg-indigo-600 px-4 py-2 rounded-lg font-semibold hover:bg-indigo-500 transition-colors flex items-center gap-2"
+              >
+                🔊 Read Question
+              </button>
             </div>
 
             <div className="bg-zinc-900 p-8 rounded-2xl border border-zinc-800">
@@ -275,7 +290,6 @@ export default function InterviewPage() {
                 autoPlay
                 muted
                 playsInline
-                // The scale-x-[-1] class mirrors the video so it feels natural!
                 className="w-full h-[350px] object-cover transform scale-x-[-1]"
               />
             </div>
