@@ -74,11 +74,10 @@ export default function InterviewPage() {
   const speakQuestion = () => {
     if ('speechSynthesis' in window) {
       const synth = window.speechSynthesis;
-      // Stop any currently speaking audio before starting a new one
       synth.cancel(); 
       
       const utterance = new SpeechSynthesisUtterance(questions[currentQuestion]);
-      utterance.rate = 0.95; // Slightly slower for a more professional interview tone
+      utterance.rate = 0.95; 
       utterance.pitch = 1;
       synth.speak(utterance);
     } else {
@@ -116,6 +115,7 @@ export default function InterviewPage() {
     setLoading(false);
   };
 
+  // --- DAY 14: EVALUATE & SAVE TO POSTGRESQL ---
   const evaluateAnswer = async () => {
     if (!transcript) {
       return alert("Please record an answer first!");
@@ -123,6 +123,7 @@ export default function InterviewPage() {
     setEvaluating(true);
 
     try {
+      // 1. Fetch AI Review Analysis from Gemini
       const response = await fetch("http://127.0.0.1:8000/evaluate-answer", {
         method: "POST",
         headers: {
@@ -138,12 +139,30 @@ export default function InterviewPage() {
       
       if (data.error) {
         alert(`Evaluation Error: ${data.error}`);
-      } else {
-        setFeedback(data.feedback);
+        setEvaluating(false);
+        return;
       }
+
+      // Render the response to our UI
+      setFeedback(data.feedback);
+
+      // 2. Chained Data Write: Persist the session to PostgreSQL
+      await fetch("http://127.0.0.1:8000/save-interview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          role: role,
+          question: questions[currentQuestion],
+          answer: transcript, 
+          feedback: data.feedback,
+        }),
+      });
+
     } catch (error) {
       console.error(error);
-      alert("Evaluation failed");
+      alert("Transactional persistence pipeline failed.");
     }
     setEvaluating(false);
   };
@@ -152,7 +171,7 @@ export default function InterviewPage() {
   const nextQuestion = () => {
     setFeedback("");
     resetTranscript();
-    window.speechSynthesis.cancel(); // Stop speaking if user clicks next
+    window.speechSynthesis.cancel(); 
 
     if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(currentQuestion + 1);
@@ -219,7 +238,6 @@ export default function InterviewPage() {
                 {questions[currentQuestion]}
               </p>
               
-              {/* NEW: Day 13 Read Question Button */}
               <button
                 onClick={speakQuestion}
                 className="bg-indigo-600 px-4 py-2 rounded-lg font-semibold hover:bg-indigo-500 transition-colors flex items-center gap-2"
