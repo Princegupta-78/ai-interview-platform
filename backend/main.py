@@ -207,3 +207,52 @@ Resume Analysis:
 {text[:500]}...
     """
     return {"analysis": analysis}
+
+# --- DAY 20: AI CODING INTERVIEW MODULE ---
+
+@app.get("/generate-coding-question")
+def generate_coding_question(role: str):
+    prompt = f"""
+    Generate ONE technical coding interview question suitable for a {role}.
+    Include:
+    1. Problem Statement
+    2. Example Input
+    3. Example Output
+    4. Constraints
+    Keep it strictly professional and formatted cleanly. Do not provide the solution.
+    """
+    try:
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        response = model.generate_content(prompt)
+        return {"question": response.text}
+    except Exception as e:
+        return {"error": str(e)}
+
+class CodeEvaluationRequest(BaseModel):
+    question: str
+    code: str
+
+@app.post("/evaluate-code")
+def evaluate_code(req: CodeEvaluationRequest):
+    prompt = f"""
+    You are a Senior Staff Software Engineer reviewing a candidate's code.
+    
+    Coding Question:
+    {req.question}
+    
+    Candidate Code:
+    {req.code}
+    
+    Evaluate the submission strictly and professionally. Provide feedback in this structure:
+    1. Correctness (Score out of 10)
+    2. Time Complexity (State the Big O and why)
+    3. Space Complexity (State the Big O and why)
+    4. Code Quality (Readability, naming conventions, edge cases)
+    5. Optimization Suggestions (How to improve the approach)
+    """
+    try:
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        response = model.generate_content(prompt)
+        return {"feedback": response.text}
+    except Exception as e:
+        return {"error": str(e)}
