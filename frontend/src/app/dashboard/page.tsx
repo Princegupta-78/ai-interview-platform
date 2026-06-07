@@ -28,12 +28,23 @@ export default function DashboardPage() {
         {/* Header Section */}
         <div className="flex justify-between items-center mb-10">
           <h1 className="text-5xl font-bold">Analytics Dashboard</h1>
-          <Link 
-            href="/interview" 
-            className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
-          >
-            + New Interview
-          </Link>
+          
+          {/* NEW: Navigation Button Group */}
+          <div className="flex gap-4">
+            <Link 
+              href="/practice" 
+              className="bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+            >
+              💻 Coding Practice
+            </Link>
+            
+            <Link 
+              href="/interview" 
+              className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+            >
+              + New Interview
+            </Link>
+          </div>
         </div>
 
         {/* Analytics Grid */}

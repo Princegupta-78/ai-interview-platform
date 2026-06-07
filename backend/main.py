@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from pypdf import PdfReader
 from fastapi.security import OAuth2PasswordBearer
+from routes.code import router as code_router
 
 # Database and Models
 from database import SessionLocal, engine, Base
@@ -21,6 +22,12 @@ from auth import hash_password, verify_password, create_access_token
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
+app.include_router(
+    code_router,
+    prefix="/code",
+    tags=["Code Evaluation"]
+)
 
 app.add_middleware(
     CORSMiddleware,
