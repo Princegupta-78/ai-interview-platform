@@ -1,15 +1,23 @@
+import os
 from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
+from dotenv import load_dotenv
 
-# REMINDER: Swap out YOUR_PASSWORD with your actual Postgres master password
-DATABASE_URL = "postgresql://postgres:9696463549@127.0.0.1:5432/ai_interview_platform"
+load_dotenv()
 
-engine = create_engine(DATABASE_URL)
+# Get URL from environment, fallback to sqlite for local testing if missing
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./interview_app.db")
 
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
-)
+# SQLAlchemy 1.4+ requires "postgresql://" not "postgres://"
+if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
+    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
+# SQLite needs connect_args, Postgres does not
+if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    engine = create_engine(SQLALCHEMY_DATABASE_URL)
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
