@@ -30,9 +30,13 @@ app.include_router(
     tags=["Code Evaluation"]
 )
 
+# --- CORS VIP LIST (UPDATED FOR VERCEL) ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://ai-interview-platform-chi-six.vercel.app"  # Your live Vercel frontend!
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
