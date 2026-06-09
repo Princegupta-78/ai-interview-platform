@@ -1,4 +1,5 @@
 import os
+import re
 import tempfile
 from dotenv import load_dotenv
 import google.generativeai as genai
@@ -169,14 +170,40 @@ def save_interview(req: InterviewSaveRequest, db: Session = Depends(get_db)):
 def get_interview_history(db: Session = Depends(get_db)):
     return db.query(Interview).order_by(Interview.id.desc()).all()
 
+# --- DAYS 29-30: REAL DATABASE-BACKED ANALYTICS ---
 @app.get("/analytics")
-def get_analytics():
+def get_analytics(db: Session = Depends(get_db)):
+    interviews = db.query(Interview).all()
+    total_interviews = len(interviews)
+    scores = []
+
+    for interview in interviews:
+        feedback = interview.feedback
+        # Extract the score dynamically using string parsing
+        if "SCORE:" in feedback:
+            try:
+                score_line = feedback.split("SCORE:")[1].split("\n")[0]
+                score = int(
+                    "".join(filter(str.isdigit, score_line))
+                )
+                scores.append(score)
+            except:
+                pass
+
+    average_score = (
+        sum(scores) / len(scores)
+        if scores
+        else 0
+    )
+
+    highest_score = max(scores) if scores else 0
+    lowest_score = min(scores) if scores else 0
+
     return {
-        "total_interviews": 12,
-        "average_score": 82,
-        "confidence": "Good",
-        "strongest_skill": "Data Structures & Algorithms",
-        "weakest_skill": "System Design"
+        "total_interviews": total_interviews,
+        "average_score": round(average_score, 2),
+        "highest_score": highest_score,
+        "lowest_score": lowest_score,
     }
 
 @app.post("/analyze-resume")

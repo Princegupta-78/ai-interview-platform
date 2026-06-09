@@ -2,20 +2,32 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation"; // NEW: Required for the card navigation
+import { useRouter } from "next/navigation"; 
 
 export default function DashboardPage() {
-  const [analytics, setAnalytics] = useState<any>(null);
-  const router = useRouter(); // NEW: Initialize router
+  const router = useRouter(); 
+  
+  // 1. Update state to match the new real backend data
+  const [analytics, setAnalytics] = useState({
+    total_interviews: 0,
+    average_score: 0,
+    highest_score: 0,
+    lowest_score: 0,
+  });
+
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch("http://127.0.0.1:8000/analytics")
       .then((res) => res.json())
-      .then((data) => setAnalytics(data))
+      .then((data) => {
+        setAnalytics(data);
+        setLoading(false);
+      })
       .catch((err) => console.error("Failed to fetch analytics:", err));
   }, []);
 
-  if (!analytics) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
         <p className="text-xl text-zinc-400 animate-pulse">Loading Analytics Dashboard...</p>
@@ -31,7 +43,6 @@ export default function DashboardPage() {
         <div className="flex justify-between items-center mb-10">
           <h1 className="text-5xl font-bold">Analytics Dashboard</h1>
           
-          {/* Top Navigation Button Group */}
           <div className="flex gap-4">
             <Link 
               href="/practice" 
@@ -49,7 +60,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Analytics Grid */}
+        {/* REAL Analytics Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
           <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 hover:border-zinc-700 transition-colors">
             <p className="text-gray-400 mb-2 font-medium">Total Interviews</p>
@@ -58,25 +69,24 @@ export default function DashboardPage() {
 
           <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 hover:border-zinc-700 transition-colors">
             <p className="text-gray-400 mb-2 font-medium">Average Score</p>
-            <h2 className="text-4xl font-bold">{analytics.average_score}%</h2>
+            <h2 className="text-4xl font-bold text-blue-400">{analytics.average_score}%</h2>
           </div>
 
           <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 hover:border-zinc-700 transition-colors">
-            <p className="text-gray-400 mb-2 font-medium">Confidence Level</p>
-            <h2 className="text-3xl font-bold text-green-400">{analytics.confidence}</h2>
+            <p className="text-gray-400 mb-2 font-medium">Highest Score</p>
+            <h2 className="text-4xl font-bold text-green-400">{analytics.highest_score}%</h2>
           </div>
 
           <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 hover:border-zinc-700 transition-colors">
-            <p className="text-gray-400 mb-2 font-medium">Strongest Skill</p>
-            <h2 className="text-3xl font-bold text-blue-400">{analytics.strongest_skill}</h2>
+            <p className="text-gray-400 mb-2 font-medium">Lowest Score</p>
+            <h2 className="text-4xl font-bold text-red-400">{analytics.lowest_score}%</h2>
           </div>
         </div>
 
-        {/* NEW: Interactive Tools Section */}
+        {/* Interactive Tools Section */}
         <h2 className="text-3xl font-bold mb-6">Preparation Tools</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
           
-          {/* Day 27-28: Resume Interview Card */}
           <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 hover:border-indigo-500 transition-colors flex flex-col items-start">
             <span className="text-4xl mb-4">📄</span>
             <h2 className="text-xl font-bold mb-2">Resume Interview</h2>
@@ -89,7 +99,6 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          {/* Standard Mock Interview Card */}
           <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 hover:border-blue-500 transition-colors flex flex-col items-start">
             <span className="text-4xl mb-4">🤖</span>
             <h2 className="text-xl font-bold mb-2">Standard Mock AI</h2>
@@ -102,7 +111,6 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          {/* OA Simulator Card */}
           <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 hover:border-green-500 transition-colors flex flex-col items-start">
             <span className="text-4xl mb-4">💻</span>
             <h2 className="text-xl font-bold mb-2">OA Simulator</h2>
@@ -115,25 +123,6 @@ export default function DashboardPage() {
             </button>
           </div>
 
-        </div>
-
-        {/* Actionable Insights */}
-        <div className="bg-zinc-900 p-8 rounded-2xl border border-zinc-800 flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-bold mb-2">Targeted Improvement</h2>
-            <p className="text-lg text-gray-300">
-              Based on recent AI evaluations, focus your preparation on:
-              <span className="text-red-400 font-bold ml-3 text-xl bg-red-950/30 px-3 py-1 rounded-lg border border-red-900/50">
-                {analytics.weakest_skill}
-              </span>
-            </p>
-          </div>
-          <Link 
-            href="/history" 
-            className="text-zinc-400 hover:text-white underline decoration-zinc-700 underline-offset-4 transition-colors whitespace-nowrap ml-6"
-          >
-            Review Past Feedback →
-          </Link>
         </div>
 
       </div>
