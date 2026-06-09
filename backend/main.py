@@ -263,3 +263,34 @@ def evaluate_code(req: CodeEvaluationRequest):
         return {"feedback": response.text}
     except Exception as e:
         return {"error": str(e)}
+
+# --- DAYS 27-28: RESUME-BASED INTERVIEW GENERATOR ---
+
+class ResumeInterviewRequest(BaseModel):
+    resume_text: str
+
+@app.post("/resume-interview")
+def resume_interview(req: ResumeInterviewRequest):
+    prompt = f"""
+    You are an expert technical recruiter and engineering manager.
+    Analyze the following resume content:
+
+    Resume:
+    {req.resume_text}
+
+    Based ONLY on the skills, projects, and experiences listed in this resume, generate a personalized interview loop. 
+    Format the output cleanly with bold headings.
+
+    Generate:
+    1. 5 Technical Interview Questions (testing the specific languages/frameworks they listed)
+    2. 3 Behavioral/HR Questions (based on their experience level)
+    3. 2 Deep-Dive Project Questions (ask them to explain specific projects they mentioned)
+    """
+
+    try:
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        response = model.generate_content(prompt)
+        return {"questions": response.text}
+
+    except Exception as e:
+        return {"error": str(e)}
