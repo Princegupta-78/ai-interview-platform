@@ -124,7 +124,7 @@ export default function InterviewPage() {
     if (!role) return alert("Please enter a role first!");
     setLoading(true);
     try {
-      const response = await fetch(`http://127.0.0.1:8000/generate-questions?role=${role}`);
+      const response = await fetch(`https://ai-interview-platform-vlvl.onrender.com/generate-questions?role=${role}`);
       const data = await response.json();
       if (data.error) {
         alert(`Backend Error: ${data.error}`);
@@ -146,7 +146,7 @@ export default function InterviewPage() {
     setEvaluating(true);
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/evaluate-answer", {
+      const response = await fetch("https://ai-interview-platform-vlvl.onrender.com/evaluate-answer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -171,7 +171,7 @@ export default function InterviewPage() {
         setFinalScore(parseInt(scoreMatch[1]));
       }
 
-      await fetch("http://127.0.0.1:8000/save-interview", {
+      await fetch("https://ai-interview-platform-vlvl.onrender.com/save-interview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -12,7 +12,7 @@ export default function LoginPage() {
 
   const handleLogin = async () => {
     // 1. Send the data to your FastAPI backend
-    const response = await fetch("http://127.0.0.1:8000/login", {
+    const response = await fetch("https://ai-interview-platform-vlvl.onrender.com/login", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

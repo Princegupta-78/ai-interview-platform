@@ -18,7 +18,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/analytics")
+    fetch("https://ai-interview-platform-vlvl.onrender.com/analytics")
       .then((res) => res.json())
       .then((data) => {
         setAnalytics(data);

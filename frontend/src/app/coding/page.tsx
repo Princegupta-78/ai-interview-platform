@@ -17,7 +17,7 @@ export default function CodingPage() {
     setQuestion("");
     setFeedback("");
     try {
-      const response = await fetch(`http://127.0.0.1:8000/generate-coding-question?role=${role}`);
+      const response = await fetch(`https://ai-interview-platform-vlvl.onrender.com/generate-coding-question?role=${role}`);
       const data = await response.json();
       setQuestion(data.question);
     } catch (error) {
@@ -31,7 +31,7 @@ export default function CodingPage() {
     if (!code) return alert("Please write some code first!");
     setEvaluating(true);
     try {
-      const response = await fetch("http://127.0.0.1:8000/evaluate-code", {
+      const response = await fetch("https://ai-interview-platform-vlvl.onrender.com/evaluate-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question, code }),

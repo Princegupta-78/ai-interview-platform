@@ -91,7 +91,7 @@ export default function PracticePage() {
     setRunResult("⏳ Compiling and running on secure server...");
     
     try {
-      const response = await fetch("http://127.0.0.1:8000/code/evaluate", {
+      const response = await fetch("https://ai-interview-platform-vlvl.onrender.com/code/evaluate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

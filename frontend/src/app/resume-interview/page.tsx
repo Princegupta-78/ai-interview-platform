@@ -22,7 +22,7 @@ export default function ResumeInterviewPage() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const analysisResponse = await fetch("http://127.0.0.1:8000/analyze-resume", {
+      const analysisResponse = await fetch("https://ai-interview-platform-vlvl.onrender.com/analyze-resume", {
         method: "POST",
         body: formData,
       });
@@ -31,7 +31,7 @@ export default function ResumeInterviewPage() {
       const analysisData = await analysisResponse.json();
 
       // 2. Send extracted text to interview generator
-      const response = await fetch("http://127.0.0.1:8000/resume-interview", {
+      const response = await fetch("https://ai-interview-platform-vlvl.onrender.com/resume-interview", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

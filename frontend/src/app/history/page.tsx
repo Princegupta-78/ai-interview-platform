@@ -13,7 +13,7 @@ export default function HistoryPage() {
 
   const fetchHistory = async () => {
     try {
-      const response = await fetch("http://127.0.0.1:8000/interview-history");
+      const response = await fetch("https://ai-interview-platform-vlvl.onrender.com/interview-history");
       const data = await response.json();
       setHistory(data);
     } catch (error) {
