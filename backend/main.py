@@ -246,18 +246,35 @@ Resume Analysis:
     """
     return {"analysis": analysis}
 
-# --- DAY 20: AI CODING INTERVIEW MODULE ---
+# --- DAY 35+: DYNAMIC AI OA GENERATOR ---
 
-@app.get("/generate-coding-question")
-def generate_coding_question(role: str):
+@app.get("/generate-oa-question")
+def generate_oa_question(role: str, difficulty: str):
     prompt = f"""
-    Generate ONE technical coding interview question suitable for a {role}.
-    Include:
-    1. Problem Statement
-    2. Example Input
-    3. Example Output
-    4. Constraints
-    Keep it strictly professional and formatted cleanly. Do not provide the solution.
+    Generate ONE technical coding interview question.
+
+    Target Role: {role}
+    Difficulty Level: {difficulty}
+
+    Return the output STRICTLY in this format with bold headings:
+
+    **Title:** [Question Title]
+    
+    **Problem Statement:** [Clear description of the problem]
+
+    **Input Format:** [How the input is structured]
+
+    **Output Format:** [How the output should be structured]
+
+    **Constraints:** [Any limits on time, space, or variable size]
+
+    **Sample Input:**
+    [Provide an example input]
+
+    **Sample Output:**
+    [Provide the expected output for the sample]
+
+    Do not provide the solution or any code. Only provide the question prompt.
     """
     try:
         model = genai.GenerativeModel('gemini-2.5-flash')
