@@ -1,6 +1,8 @@
 import os
 import re
 import tempfile
+import json
+import subprocess
 from dotenv import load_dotenv
 import google.generativeai as genai
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
@@ -10,6 +12,7 @@ from pydantic import BaseModel
 from pypdf import PdfReader
 from fastapi.security import OAuth2PasswordBearer
 from routes.code import router as code_router
+from routes.executor import router as executor_router
 
 # Database and Models
 from database import SessionLocal, engine, Base
@@ -28,6 +31,11 @@ app.include_router(
     code_router,
     prefix="/code",
     tags=["Code Evaluation"]
+)
+app.include_router(
+    executor_router,
+    prefix="/executor",
+    tags=["Code Execution"]
 )
 
 # --- CORS VIP LIST (UPDATED FOR VERCEL) ---
@@ -246,42 +254,134 @@ Resume Analysis:
     """
     return {"analysis": analysis}
 
-# --- DAY 35+: DYNAMIC AI OA GENERATOR ---
+# --- DAY 37: LEETCODE-STYLE AI OA GENERATOR ---
 
 @app.get("/generate-oa-question")
 def generate_oa_question(role: str, difficulty: str):
     prompt = f"""
-    Generate ONE technical coding interview question.
+    Generate ONE competitive programming interview problem for a {role} role.
 
-    Target Role: {role}
-    Difficulty Level: {difficulty}
+    Return ONLY valid JSON.
 
-    Return the output STRICTLY in this format with bold headings:
+    {{
+      "markdown": "**Title: ...**\\n\\n**Problem Statement:** ...\\n\\n**Constraints:** ...\\n\\n**Input Format:** ...\\n\\n**Output Format:** ...",
+      "starter_code": "#include <iostream>\\n#include <vector>\\nusing namespace std;\\n\\nint main() {{\\n    // Write your code here\\n    return 0;\\n}}",
+      "sample_tests": [
+        {{
+          "input": "...",
+          "output": "..."
+        }}
+      ],
+      "hidden_tests": [
+        {{
+          "input": "...",
+          "output": "..."
+        }}
+      ]
+    }}
 
-    **Title:** [Question Title]
-    
-    **Problem Statement:** [Clear description of the problem]
-
-    **Input Format:** [How the input is structured]
-
-    **Output Format:** [How the output should be structured]
-
-    **Constraints:** [Any limits on time, space, or variable size]
-
-    **Sample Input:**
-    [Provide an example input]
-
-    **Sample Output:**
-    [Provide the expected output for the sample]
-
-    Do not provide the solution or any code. Only provide the question prompt.
+    CRITICAL REQUIREMENTS:
+    1. STRICTLY EMPTY STARTER CODE: The "starter_code" must ONLY contain the empty int main() template. DO NOT put the solution logic inside the starter code.
+    2. UNIQUE DETERMINISTIC OUTPUT: The problem MUST have exactly ONE unique valid output for any given input. Do NOT generate problems where "multiple valid arrangements exist" (our grader uses strict string matching).
+    3. Generate problems that use standard input/output (cin/cout).
+    4. Provide exactly 3 sample test cases and 5 hidden test cases.
+    5. Difficulty: {difficulty}
     """
+    
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel(
+            'gemini-2.5-flash',
+            generation_config={"response_mime_type": "application/json"}
+        )
         response = model.generate_content(prompt)
-        return {"question": response.text}
+        
+        # 1. Clean the response text to prevent JSONDecodeError
+        clean_text = response.text.strip()
+        if clean_text.startswith("```json"):
+            clean_text = clean_text[7:]
+        if clean_text.startswith("```"):
+            clean_text = clean_text[3:]
+        if clean_text.endswith("```"):
+            clean_text = clean_text[:-3]
+            
+        # 2. Parse the clean string
+        # 2. Parse the clean string
+        data = json.loads(clean_text.strip())
+        
+        return {
+            "question": data.get("markdown", "Failed to parse markdown."),
+            "starter_code": data.get("starter_code", "// Error generating starter code"),
+            "sample_tests": data.get("sample_tests", []),
+            "hidden_tests": data.get("hidden_tests", [])
+        }
     except Exception as e:
+        # 3. If it fails, print the exact reason to your VS Code terminal!
+        print(f"❌ AI Parsing Error: {str(e)}")
+        try:
+            print(f"❌ Raw AI Output was: {response.text}")
+        except:
+            pass
+            
         return {"error": str(e)}
+
+class RunHiddenTestsRequest(BaseModel):
+    code: str
+    hidden_tests: list
+
+@app.post("/run-hidden-tests")
+def run_hidden_tests(data: RunHiddenTestsRequest):
+    with tempfile.TemporaryDirectory() as temp_dir:
+        cpp_file = os.path.join(temp_dir, "solution.cpp")
+        exe_file = os.path.join(temp_dir, "solution")
+
+        # 1. Write user code to a temporary file
+        with open(cpp_file, "w") as f:
+            f.write(data.code)
+
+        # 2. Compile the C++ code
+        compile_process = subprocess.run(
+            ["g++", cpp_file, "-std=c++17", "-o", exe_file],
+            capture_output=True,
+            text=True
+        )
+
+        # 3. Handle Compilation Errors
+        if compile_process.returncode != 0:
+            return {
+                "passed": 0,
+                "total": len(data.hidden_tests) if data.hidden_tests else 5,
+                "error": compile_process.stderr
+            }
+
+        passed = 0
+        total_tests = len(data.hidden_tests) if data.hidden_tests else 5
+
+        # 4. Execute the compiled binary against each hidden test
+        for test in data.hidden_tests:
+            try:
+                run_process = subprocess.run(
+                    [exe_file],
+                    input=test["input"],
+                    capture_output=True,
+                    text=True,
+                    timeout=2 # Prevent infinite loops
+                )
+                
+                output = run_process.stdout.strip()
+                expected = str(test["output"]).strip()
+
+                if output == expected:
+                    passed += 1
+            except subprocess.TimeoutExpired:
+                # If code takes longer than 2 seconds, it fails the test (TLE)
+                pass 
+            except Exception:
+                pass
+
+        return {
+            "passed": passed,
+            "total": total_tests
+        }
 
 class CodeEvaluationRequest(BaseModel):
     question: str
