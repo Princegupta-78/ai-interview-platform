@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation"; 
 import Editor from "@monaco-editor/react";
 import ReactMarkdown from 'react-markdown';
 
@@ -8,6 +9,20 @@ import ReactMarkdown from 'react-markdown';
 const BACKEND_URL = "https://ai-interview-platform-vlvl.onrender.com";
 
 export default function PracticePage() {
+    const router = useRouter();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // --- SECURITY LOCK ---
+  useEffect(() => {
+    const token = localStorage.getItem("token"); 
+    if (!token) {
+      router.push("/login");
+    } else {
+      setIsAuthenticated(true);
+    }
+  }, [router]);
+
+
   // AI Generation State
   const [role, setRole] = useState("Software Development Engineer");
   const [difficulty, setDifficulty] = useState("Medium");
@@ -108,6 +123,10 @@ export default function PracticePage() {
       setEvaluating(false);
     }
   };
+
+  if (!isAuthenticated) {
+    return <div className="min-h-screen bg-black flex items-center justify-center text-white">Verifying credentials...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center py-10 px-6">
