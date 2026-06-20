@@ -1,13 +1,17 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import SpeechRecognition, {
   useSpeechRecognition,
 } from "react-speech-recognition";
 import jsPDF from "jspdf";
 
 export default function InterviewPage() {
+  const router = useRouter();
+  
   // --- STATES ---
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [role, setRole] = useState("");
   const [questions, setQuestions] = useState<string[]>([]);
   const [started, setStarted] = useState(false);
@@ -25,18 +29,25 @@ export default function InterviewPage() {
   // --- REFS ---
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  // --- HOOKS ---
+  // --- HOOKS (ALL MUST BE AT THE TOP) ---
   const {
     transcript,
     resetTranscript,
     browserSupportsSpeechRecognition,
   } = useSpeechRecognition();
 
+  // 1. Mount & Security Check Hook
   useEffect(() => {
     setIsMounted(true);
-  }, []);
+    const token = localStorage.getItem("token"); 
+    if (!token) {
+      router.push("/login");
+    } else {
+      setIsAuthenticated(true);
+    }
+  }, [router]);
 
-  // Timer Logic
+  // 2. Timer Hook
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (started && !interviewCompleted) {
@@ -47,7 +58,7 @@ export default function InterviewPage() {
     return () => clearInterval(timer);
   }, [started, interviewCompleted]);
 
-  // Webcam Logic
+  // 3. Webcam Hook
   useEffect(() => {
     if (started && !interviewCompleted) {
       startWebcam();
@@ -61,6 +72,8 @@ export default function InterviewPage() {
     };
   }, [started, interviewCompleted]);
 
+
+  // --- HELPER FUNCTIONS ---
   const startWebcam = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -75,17 +88,14 @@ export default function InterviewPage() {
     }
   };
 
-  // --- PDF DOWNLOADER ---
   const downloadReport = () => {
     const doc = new jsPDF();
     doc.setFontSize(22);
     doc.text("AI Interview Report", 20, 20);
     doc.setFontSize(14);
     
-    // Dynamically inject the real score into the PDF
     doc.text(`Final Score: ${finalScore}%`, 20, 40);
     
-    // Safe extraction for PDF
     const comm = feedback.includes("COMMUNICATION:") ? feedback.split("COMMUNICATION:")[1].split("\n")[0].trim() : "N/A";
     const tech = feedback.includes("TECHNICAL_SKILL:") ? feedback.split("TECHNICAL_SKILL:")[1].split("\n")[0].trim() : "N/A";
     const conf = feedback.includes("CONFIDENCE:") ? feedback.split("CONFIDENCE:")[1].split("\n")[0].trim() : "N/A";
@@ -96,10 +106,7 @@ export default function InterviewPage() {
     
     doc.text("AI Detailed Feedback:", 20, 105);
     
-    // Extract just the paragraph feedback for the PDF
     const rawFeedback = feedback.includes("FEEDBACK:") ? feedback.split("FEEDBACK:")[1].trim() : feedback;
-    
-    // Word wrap the feedback so it doesn't run off the PDF page
     const splitFeedback = doc.splitTextToSize(rawFeedback, 170);
     doc.text(splitFeedback, 20, 120);
 
@@ -162,10 +169,8 @@ export default function InterviewPage() {
         return;
       }
 
-      // Render raw text to UI
       setFeedback(data.feedback);
 
-      // --- DAY 18: REGEX SCORE EXTRACTION ---
       const scoreMatch = data.feedback.match(/SCORE:\s*(\d+)/);
       if (scoreMatch) {
         setFinalScore(parseInt(scoreMatch[1]));
@@ -194,11 +199,9 @@ export default function InterviewPage() {
     window.speechSynthesis.cancel(); 
 
     if (currentQuestion < questions.length - 1) {
-      // Only clear the feedback if we are moving to a NEW question
       setFeedback("");
       setCurrentQuestion(currentQuestion + 1);
     } else {
-      // If we are finishing the interview, DO NOT clear the feedback!
       SpeechRecognition.stopListening();
       setInterviewCompleted(true);
     }
@@ -210,9 +213,13 @@ export default function InterviewPage() {
     return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
 
-  if (!isMounted) return null;
+  // --- EARLY RETURNS & GUARDS (MUST BE AFTER ALL HOOKS) ---
+  if (!isMounted || !isAuthenticated) {
+    return <div className="min-h-screen bg-black flex items-center justify-center text-white">Verifying credentials...</div>;
+  }
+
   if (!browserSupportsSpeechRecognition) {
-    return <div className="text-white p-10">Browser does not support speech recognition.</div>;
+    return <div className="text-white p-10 bg-black min-h-screen">Browser does not support speech recognition. Try Google Chrome.</div>;
   }
 
   // --- MAIN RENDER ---

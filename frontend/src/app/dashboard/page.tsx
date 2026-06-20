@@ -5,9 +5,20 @@ import Link from "next/link";
 import { useRouter } from "next/navigation"; 
 
 export default function DashboardPage() {
-  const router = useRouter(); 
-  
-  // 1. Update state to match the new real backend data
+  const router = useRouter();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // --- 1. SECURITY LOCK ---
+  useEffect(() => {
+    const token = localStorage.getItem("token"); 
+    if (!token) {
+      router.push("/login");
+    } else {
+      setIsAuthenticated(true);
+    }
+  }, [router]);
+
+  // --- 2. ANALYTICS STATE ---
   const [analytics, setAnalytics] = useState({
     total_interviews: 0,
     average_score: 0,
@@ -17,15 +28,24 @@ export default function DashboardPage() {
 
   const [loading, setLoading] = useState(true);
 
+  // --- 3. FETCH ANALYTICS DATA ---
   useEffect(() => {
-    fetch("https://ai-interview-platform-vlvl.onrender.com/analytics")
-      .then((res) => res.json())
-      .then((data) => {
-        setAnalytics(data);
-        setLoading(false);
-      })
-      .catch((err) => console.error("Failed to fetch analytics:", err));
-  }, []);
+    // Only fetch analytics if the user is actually authenticated
+    if (isAuthenticated) {
+      fetch("https://ai-interview-platform-vlvl.onrender.com/analytics")
+        .then((res) => res.json())
+        .then((data) => {
+          setAnalytics(data);
+          setLoading(false);
+        })
+        .catch((err) => console.error("Failed to fetch analytics:", err));
+    }
+  }, [isAuthenticated]);
+
+  // --- 4. RENDER: LOADING SCREENS ---
+  if (!isAuthenticated) {
+    return <div className="min-h-screen bg-black flex items-center justify-center text-white">Verifying credentials...</div>;
+  }
 
   if (loading) {
     return (
@@ -35,6 +55,7 @@ export default function DashboardPage() {
     );
   }
 
+  // --- 5. RENDER: SECURE DASHBOARD UI ---
   return (
     <div className="min-h-screen bg-black text-white p-10">
       <div className="max-w-7xl mx-auto">
